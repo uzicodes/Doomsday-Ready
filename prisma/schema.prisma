@@ -1,13 +1,29 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Movie {
+  id             String   @id @default(cuid())
+  title          String   @unique
+  releaseYear    Int
+  runtimeMinutes Int
+  watched        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Self-referential many-to-many DAG for prerequisites
+  prerequisites  Movie[]  @relation("MoviePrerequisites")
+  dependents     Movie[]  @relation("MoviePrerequisites")
+}
+
+model Cinema {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  bundleSizes Int[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
