@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CinemaItem, MovieItem } from "@/types";
 import { MoviesView } from "@/components/MoviesView";
+import { RewatchPlanView } from "@/components/RewatchPlanView";
 
 type ActiveTab = "movies" | "rewatch" | "booking";
 
@@ -148,14 +149,11 @@ export default function HomePage() {
               <MoviesView movies={movies} onRefreshMovies={fetchMovies} />
             )}
 
+
             {activeTab === "rewatch" && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-                <h2 className="text-lg font-semibold text-white">Rewatch Plan</h2>
-                <p className="text-sm text-slate-400 mt-1">
-                  Select a target movie to compute prerequisite watch order. Ready for Step 9 UI.
-                </p>
-              </div>
-            )}
+              <RewatchPlanView movies={movies} onRefreshMovies={fetchMovies} />
+           )}
+           
 
             {activeTab === "booking" && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
