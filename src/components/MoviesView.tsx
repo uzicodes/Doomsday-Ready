@@ -1,11 +1,64 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MovieItem } from "@/types";
 
 interface MoviesViewProps {
   movies: MovieItem[];
   onRefreshMovies: () => Promise<void>;
+}
+
+interface ApiFault {
+  code: string | null;
+  message: string;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function matchesQuery(movie: MovieItem, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return movie.title.toLowerCase().includes(q) || String(movie.releaseYear).includes(q);
+}
+
+function FaultBanner({ fault }: { fault: ApiFault }) {
+  const circular = fault.code === "CIRCULAR_DEPENDENCY";
+  const heading = circular
+    ? "PROTOCOL VIOLATION // 409 CIRCULAR_DEPENDENCY"
+    : fault.code
+      ? `REQUEST REJECTED // ${fault.code}`
+      : "REQUEST REJECTED";
+
+  return (
+    <div role="alert" className="overflow-hidden rounded-md border border-crimson-bright/60 bg-crimson/10">
+      <div className="flex items-center gap-2 bg-crimson px-3 py-1.5">
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-white" fill="none" aria-hidden="true">
+          <path d="M8 1.5 15 14H1L8 1.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+          <path d="M8 6v3.5M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white">
+          {heading}
+        </span>
+      </div>
+      <p className="px-3 py-2 text-xs leading-relaxed text-red-100">{fault.message}</p>
+    </div>
+  );
+}
+
+function StatusIcon({ watched }: { watched: boolean }) {
+  return watched ? (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" fill="rgba(16,185,129,0.12)" />
+      <path d="M7.5 12.5l3 3 6-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" />
+      <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+    </svg>
+  );
 }
 
 export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
@@ -15,16 +68,28 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
   const [runtimeMinutes, setRuntimeMinutes] = useState("140");
   const [watched, setWatched] = useState(false);
   const [selectedPrereqs, setSelectedPrereqs] = useState<string[]>([]);
+  const [prereqSearch, setPrereqSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<ApiFault | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
   // Per-movie watched toggle loading & inline prerequisite editor state
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const [editingMovieId, setEditingMovieId] = useState<string | null>(null);
   const [editPrereqIds, setEditPrereqIds] = useState<string[]>([]);
+  const [editSearch, setEditSearch] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<ApiFault | null>(null);
+
+  const filteredNewPrereqs = useMemo(
+    () => movies.filter((m) => matchesQuery(m, prereqSearch)),
+    [movies, prereqSearch]
+  );
+  const filteredEditPrereqs = useMemo(
+    () => movies.filter((m) => matchesQuery(m, editSearch)),
+    [movies, editSearch]
+  );
 
   function toggleNewPrereq(id: string) {
     setSelectedPrereqs((prev) =>
@@ -59,8 +124,10 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
 
       const data = await res.json();
       if (!res.ok) {
-        const prefix = data.error ? `[${data.error}] ` : "";
-        setFormError(`${prefix}${data.message || "Failed to add movie."}`);
+        setFormError({
+          code: data.error ?? null,
+          message: data.message || "Failed to add movie.",
+        });
         return;
       }
 
@@ -69,16 +136,21 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
       setRuntimeMinutes("140");
       setWatched(false);
       setSelectedPrereqs([]);
-      setFormSuccess(`Added "${data.movie.title}" to the MCU timeline.`);
+      setPrereqSearch("");
+      setFormSuccess(`Archive entry registered: "${data.movie.title}" added to the MCU timeline.`);
       await onRefreshMovies();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Network error while creating movie.");
+      setFormError({
+        code: null,
+        message: err instanceof Error ? err.message : "Network error while creating movie.",
+      });
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleToggleWatched(movie: MovieItem) {
+    setToggleError(null);
     try {
       setTogglingId(movie.id);
       const res = await fetch(`/api/movies/${movie.id}`, {
@@ -89,11 +161,13 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
 
       if (!res.ok) {
         const data = await res.json();
-        alert(data.message || "Failed to update watched status.");
+        setToggleError(data.message || "Failed to update watched status.");
         return;
       }
 
       await onRefreshMovies();
+    } catch (err) {
+      setToggleError(err instanceof Error ? err.message : "Network error while updating status.");
     } finally {
       setTogglingId(null);
     }
@@ -102,12 +176,14 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
   function startEditingPrerequisites(movie: MovieItem) {
     setEditingMovieId(movie.id);
     setEditPrereqIds([...movie.prerequisiteIds]);
+    setEditSearch("");
     setEditError(null);
   }
 
   function cancelEditingPrerequisites() {
     setEditingMovieId(null);
     setEditPrereqIds([]);
+    setEditSearch("");
     setEditError(null);
   }
 
@@ -123,235 +199,296 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
 
       const data = await res.json();
       if (!res.ok) {
-        const codeBadge = data.error === "CIRCULAR_DEPENDENCY" ? "409 CIRCULAR_DEPENDENCY: " : "";
-        setEditError(`${codeBadge}${data.message || "Failed to update prerequisites."}`);
+        setEditError({
+          code: data.error ?? null,
+          message: data.message || "Failed to update prerequisites.",
+        });
         return;
       }
 
       setEditingMovieId(null);
+      setEditSearch("");
       await onRefreshMovies();
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Network error while saving prerequisites.");
+      setEditError({
+        code: null,
+        message: err instanceof Error ? err.message : "Network error while saving prerequisites.",
+      });
     } finally {
       setSavingEdit(false);
     }
   }
 
+  const watchedCount = movies.filter((m) => m.watched).length;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-      {/* Left Column: Add Movie Form */}
-      <section className="lg:col-span-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 className="text-lg font-semibold text-white">Add MCU Movie</h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Create a movie entry and select any films that should be watched beforehand.
-        </p>
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+      {/* Left Panel: Register Archive Entry */}
+      <section className="panel p-5 lg:col-span-5">
+        <div className="flex items-center justify-between border-b border-edge pb-3">
+          <div>
+            <h2 className="font-display text-base font-bold tracking-[0.1em] text-white">
+              REGISTER ARCHIVE ENTRY
+            </h2>
+            <p className="mono-label mt-1 normal-case tracking-[0.06em]">
+              Log a film and flag its required viewing.
+            </p>
+          </div>
+          <span className="font-mono text-[10px] tracking-[0.14em] text-arc-bright">FORM // A-01</span>
+        </div>
 
         <form onSubmit={handleCreateMovie} className="mt-5 space-y-4">
-          {formError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-200">
-              {formError}
-            </div>
-          )}
+          {formError && <FaultBanner fault={formError} />}
 
           {formSuccess && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-200">
+            <div
+              role="status"
+              className="rounded-md border border-arc/50 bg-arc/10 px-3 py-2 text-xs text-emerald-100"
+            >
               {formSuccess}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">
-              Movie Title <span className="text-rose-400">*</span>
+            <label htmlFor="movie-title" className="mono-label mb-1.5 block">
+              Title <span className="text-crimson-bright">*</span>
             </label>
             <input
+              id="movie-title"
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g., Spider-Man: Brand New Day"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+              className="field"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Release Year <span className="text-rose-400">*</span>
+              <label htmlFor="movie-year" className="mono-label mb-1.5 block">
+                Release Year <span className="text-crimson-bright">*</span>
               </label>
               <input
+                id="movie-year"
                 type="number"
                 required
                 min={1900}
                 max={2100}
                 value={releaseYear}
                 onChange={(e) => setReleaseYear(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                className="field font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Runtime (1–300 min) <span className="text-rose-400">*</span>
+              <label htmlFor="movie-runtime" className="mono-label mb-1.5 block">
+                Runtime // 1-300 MIN <span className="text-crimson-bright">*</span>
               </label>
               <input
+                id="movie-runtime"
                 type="number"
                 required
                 min={1}
                 max={300}
                 value={runtimeMinutes}
                 onChange={(e) => setRuntimeMinutes(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                className="field font-mono"
               />
             </div>
           </div>
 
-          {/* Prerequisites Multi-Select */}
+          {/* Prerequisite checklist */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-slate-300">
-                Prerequisites (Watch These First)
-              </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="mono-label">Prerequisites // Watch First</span>
               {selectedPrereqs.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setSelectedPrereqs([])}
-                  className="text-xs text-slate-400 hover:text-white"
+                  className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-dim hover:text-white"
                 >
-                  Clear ({selectedPrereqs.length})
+                  Clear [{pad(selectedPrereqs.length)}]
                 </button>
               )}
             </div>
 
             {movies.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">No existing movies yet.</p>
+              <p className="well px-3 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-faint">
+                No archive entries available.
+              </p>
             ) : (
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/80 p-2 space-y-1">
-                {movies.map((m) => {
-                  const checked = selectedPrereqs.includes(m.id);
-                  return (
-                    <label
-                      key={m.id}
-                      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer transition ${
-                        checked
-                          ? "bg-emerald-500/15 text-emerald-200"
-                          : "text-slate-300 hover:bg-slate-900"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleNewPrereq(m.id)}
-                        className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                      />
-                      <span className="flex-1 truncate">{m.title}</span>
-                      <span className="text-slate-500">{m.releaseYear}</span>
-                    </label>
-                  );
-                })}
+              <div className="well overflow-hidden">
+                <div className="border-b border-edge p-2">
+                  <input
+                    type="search"
+                    value={prereqSearch}
+                    onChange={(e) => setPrereqSearch(e.target.value)}
+                    placeholder="Filter by title or year"
+                    aria-label="Filter prerequisites"
+                    className="field !py-1.5 font-mono !text-xs"
+                  />
+                </div>
+                <div className="max-h-48 space-y-0.5 overflow-y-auto p-1.5">
+                  {filteredNewPrereqs.length === 0 ? (
+                    <p className="px-2 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-faint">
+                      No matches.
+                    </p>
+                  ) : (
+                    filteredNewPrereqs.map((m) => {
+                      const checked = selectedPrereqs.includes(m.id);
+                      return (
+                        <label
+                          key={m.id}
+                          className={`flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 text-xs transition ${
+                            checked ? "bg-arc/10 text-white" : "text-dim hover:bg-steel-2"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleNewPrereq(m.id)}
+                            className="chk"
+                          />
+                          <span className="flex-1 truncate">{m.title}</span>
+                          <span className="font-mono text-[11px] text-faint">{m.releaseYear}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
           </div>
 
-          <label className="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer pt-1">
+          <label className="flex cursor-pointer items-center gap-2.5 pt-1">
             <input
               type="checkbox"
               checked={watched}
               onChange={(e) => setWatched(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              className="chk"
             />
-            <span>Mark as already watched</span>
+            <span className="mono-label !text-ink">Mark as already watched</span>
           </label>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 transition"
-          >
-            {submitting ? "Adding Movie..." : "Add Movie"}
+          <button type="submit" disabled={submitting} className="btn-primary w-full">
+            {submitting ? "Registering..." : "Register Entry"}
           </button>
         </form>
       </section>
 
-      {/* Right Column: Movies Catalog */}
-      <section className="lg:col-span-7 space-y-4">
-        <div className="flex items-center justify-between">
+      {/* Right Panel: MCU Timeline Archive */}
+      <section className="space-y-4 lg:col-span-7">
+        <div className="flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-white">MCU Movie Catalog</h2>
-            <p className="text-xs text-slate-400">
-              Tick movies as watched or edit prerequisite dependencies.
+            <h2 className="font-display text-base font-bold tracking-[0.1em] text-white">
+              MCU TIMELINE ARCHIVE
+            </h2>
+            <p className="mono-label mt-1 normal-case tracking-[0.06em]">
+              Toggle watched status or edit dependency chains.
             </p>
           </div>
-          <span className="text-xs rounded-full bg-slate-800 px-3 py-1 text-slate-300">
-            {movies.filter((m) => m.watched).length} of {movies.length} watched
+          <span className="rounded border border-edge-hi bg-steel px-2.5 py-1 font-mono text-[11px] font-semibold tracking-[0.1em] text-dim">
+            <span className="text-arc-bright">{pad(watchedCount)}</span> / {pad(movies.length)} WATCHED
           </span>
         </div>
 
+        {toggleError && (
+          <FaultBanner fault={{ code: null, message: toggleError }} />
+        )}
+
         {movies.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-8 text-center text-sm text-slate-400">
-            No movies found. Add your first movie using the form on the left.
+          <div className="panel p-8 text-center">
+            <p className="mono-label">ARCHIVE EMPTY // REGISTER THE FIRST ENTRY USING THE FORM</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {movies.map((movie) => {
+          <div className="space-y-2.5">
+            {movies.map((movie, index) => {
               const isEditing = editingMovieId === movie.id;
 
               return (
-                <div
+                <article
                   key={movie.id}
-                  className={`rounded-2xl border p-4 transition ${
-                    movie.watched
-                      ? "border-emerald-500/30 bg-emerald-950/10"
-                      : "border-slate-800 bg-slate-900/60"
+                  className={`panel relative overflow-hidden ${
+                    movie.watched ? "border-arc/35" : ""
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={movie.watched}
-                        disabled={togglingId === movie.id}
-                        onChange={() => handleToggleWatched(movie)}
-                        aria-label={`Mark ${movie.title} as watched`}
-                        className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3
-                            className={`font-semibold text-sm ${
-                              movie.watched ? "text-emerald-200 line-through decoration-emerald-500/50" : "text-white"
-                            }`}
-                          >
-                            {movie.title}
-                          </h3>
-                          <span className="text-xs text-slate-400">
-                            ({movie.releaseYear})
-                          </span>
-                          <span className="text-xs rounded-md bg-slate-800 px-2 py-0.5 text-slate-300">
-                            {movie.runtimeMinutes} min
-                          </span>
-                          {movie.watched && (
-                            <span className="text-[11px] font-medium rounded-md bg-emerald-500/20 text-emerald-300 px-2 py-0.5">
-                              Watched
-                            </span>
-                          )}
-                        </div>
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-y-0 left-0 w-[3px] ${
+                      movie.watched ? "bg-arc-bright" : "bg-edge-hi"
+                    }`}
+                  />
 
-                        {/* Prerequisites List */}
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <span className="text-xs text-slate-500">Prerequisites:</span>
-                          {movie.prerequisites.length === 0 ? (
-                            <span className="text-xs text-slate-500 italic">None</span>
-                          ) : (
-                            movie.prerequisites.map((prereq) => (
-                              <span
-                                key={prereq.id}
-                                className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-300"
-                              >
-                                {prereq.watched ? "✓" : "○"} {prereq.title}
-                              </span>
-                            ))
-                          )}
-                        </div>
+                  <div className="flex items-start gap-3.5 p-4 pl-5">
+                    <span className="mt-0.5 hidden w-7 shrink-0 font-mono text-xs font-semibold text-faint sm:block">
+                      {pad(index + 1)}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleWatched(movie)}
+                      disabled={togglingId === movie.id}
+                      aria-pressed={movie.watched}
+                      aria-label={`Mark ${movie.title} as ${movie.watched ? "unwatched" : "watched"}`}
+                      className={`mt-0.5 shrink-0 transition disabled:cursor-wait disabled:opacity-50 ${
+                        movie.watched ? "text-arc-bright" : "text-faint hover:text-dim"
+                      }`}
+                    >
+                      <StatusIcon watched={movie.watched} />
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded border border-edge-hi bg-obsidian px-1.5 py-0.5 font-mono text-[11px] font-semibold text-dim">
+                          {movie.releaseYear}
+                        </span>
+                        <h3
+                          className={`font-display text-sm font-semibold tracking-wide ${
+                            movie.watched ? "text-emerald-100" : "text-white"
+                          }`}
+                        >
+                          {movie.title}
+                        </h3>
+                        <span className="font-mono text-[11px] font-semibold tracking-[0.08em] text-gold">
+                          {movie.runtimeMinutes} MIN
+                        </span>
+                        {movie.watched && (
+                          <span className="rounded border border-arc/40 bg-arc/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-arc-bright">
+                            Watched
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                        <span className="mono-label !text-[10px]">Requires</span>
+                        {movie.prerequisites.length === 0 ? (
+                          <span className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-faint">
+                            None
+                          </span>
+                        ) : (
+                          movie.prerequisites.map((prereq) => (
+                            <span
+                              key={prereq.id}
+                              className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] ${
+                                prereq.watched
+                                  ? "border-arc/35 bg-arc/5 text-emerald-200"
+                                  : "border-edge-hi bg-obsidian text-dim"
+                              }`}
+                            >
+                              {prereq.watched ? (
+                                <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 text-arc-bright" fill="none" aria-hidden="true">
+                                  <path d="M2 6.5l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+                                </svg>
+                              ) : (
+                                <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 text-faint" fill="none" aria-hidden="true">
+                                  <circle cx="6" cy="6" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+                                </svg>
+                              )}
+                              {prereq.title}
+                            </span>
+                          ))
+                        )}
                       </div>
                     </div>
 
@@ -359,54 +496,74 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
                       <button
                         type="button"
                         onClick={() => startEditingPrerequisites(movie)}
-                        className="shrink-0 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-600 hover:text-white transition"
+                        className="btn-ghost shrink-0"
                       >
-                        Edit Prerequisites
+                        Edit Dependencies
                       </button>
                     )}
                   </div>
 
-                  {/* Inline Prerequisite Editor */}
+                  {/* Expandable Edit Dependencies panel */}
                   {isEditing && (
-                    <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-300">
-                          Select movies required before <strong className="text-white">{movie.title}</strong>:
+                    <div className="space-y-3 border-t border-edge bg-obsidian/60 p-4 pl-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="mono-label !text-ink">
+                          Edit Dependencies // <span className="text-arc-bright">{movie.title}</span>
+                        </span>
+                        <span className="font-mono text-[10.5px] tracking-[0.1em] text-dim">
+                          SELECTED [{pad(editPrereqIds.length)}]
                         </span>
                       </div>
 
-                      {editError && (
-                        <div className="rounded-xl border border-rose-500/50 bg-rose-500/15 px-3 py-2 text-xs text-rose-200 font-medium">
-                          {editError}
-                        </div>
-                      )}
+                      {editError && <FaultBanner fault={editError} />}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-2">
-                        {movies.map((candidate) => {
-                          const checked = editPrereqIds.includes(candidate.id);
-                          const isSelf = candidate.id === movie.id;
-                          return (
-                            <label
-                              key={candidate.id}
-                              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer ${
-                                checked
-                                  ? "bg-emerald-500/15 text-emerald-200"
-                                  : "text-slate-300 hover:bg-slate-900"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleEditPrereq(candidate.id)}
-                                className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                              />
-                              <span className="truncate">
-                                {candidate.title}
-                                {isSelf ? " (Self)" : ""}
-                              </span>
-                            </label>
-                          );
-                        })}
+                      <input
+                        type="search"
+                        value={editSearch}
+                        onChange={(e) => setEditSearch(e.target.value)}
+                        placeholder="Filter by title or year"
+                        aria-label="Filter dependencies"
+                        className="field !py-1.5 font-mono !text-xs"
+                      />
+
+                      <div className="well grid max-h-48 grid-cols-1 gap-0.5 overflow-y-auto p-1.5 sm:grid-cols-2">
+                        {filteredEditPrereqs.length === 0 ? (
+                          <p className="px-2 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-faint">
+                            No matches.
+                          </p>
+                        ) : (
+                          filteredEditPrereqs.map((candidate) => {
+                            const checked = editPrereqIds.includes(candidate.id);
+                            const isSelf = candidate.id === movie.id;
+                            return (
+                              <label
+                                key={candidate.id}
+                                className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs transition ${
+                                  checked ? "bg-arc/10 text-white" : "text-dim hover:bg-steel-2"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleEditPrereq(candidate.id)}
+                                  className="chk"
+                                />
+                                <span className="flex-1 truncate">{candidate.title}</span>
+                                <span className="font-mono text-[10.5px] text-faint">
+                                  {candidate.releaseYear}
+                                </span>
+                                {isSelf && (
+                                  <span
+                                    className="badge-crimson"
+                                    data-tooltip="A movie cannot depend on itself"
+                                  >
+                                    SELF
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })
+                        )}
                       </div>
 
                       <div className="flex items-center justify-end gap-2">
@@ -414,7 +571,7 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
                           type="button"
                           onClick={cancelEditingPrerequisites}
                           disabled={savingEdit}
-                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:text-white"
+                          className="btn-ghost"
                         >
                           Cancel
                         </button>
@@ -422,14 +579,14 @@ export function MoviesView({ movies, onRefreshMovies }: MoviesViewProps) {
                           type="button"
                           onClick={() => handleSavePrerequisites(movie.id)}
                           disabled={savingEdit}
-                          className="rounded-lg bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50"
+                          className="btn-primary !px-4 !py-2 !text-[11px]"
                         >
-                          {savingEdit ? "Saving..." : "Save Prerequisites"}
+                          {savingEdit ? "Saving..." : "Save Dependencies"}
                         </button>
                       </div>
                     </div>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>

@@ -1,13 +1,29 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "Doomsday Ready — MCU Rewatch & Watch-Party Planner",
+  title: "Doomsday Ready | Avengers: Doomsday Rewatch & Premiere Logistics",
   description:
-    "Plan your chronological MCU rewatch order before Avengers: Doomsday and calculate exact opening-night cinema seat bundles.",
+    "Tactical briefing for Avengers: Doomsday. Plan your chronological MCU rewatch order and calculate exact IMAX premiere seat bundles.",
 };
 
 export default function RootLayout({
@@ -16,10 +32,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${inter.className} min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200`}
-      >
+    <html
+      lang="en"
+      className={`dark ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="min-h-screen bg-obsidian font-sans text-ink antialiased selection:bg-arc/30 selection:text-white">
         {children}
       </body>
     </html>
