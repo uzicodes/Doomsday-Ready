@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CinemaItem, MovieItem } from "@/types";
 import { MoviesView } from "@/components/MoviesView";
 import { RewatchPlanView } from "@/components/RewatchPlanView";
+import { BookingView } from "@/components/BookingView";
 
 type ActiveTab = "movies" | "rewatch" | "booking";
 
@@ -156,13 +157,10 @@ export default function HomePage() {
            
 
             {activeTab === "booking" && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-                <h2 className="text-lg font-semibold text-white">Watch-Party Booking</h2>
-                <p className="text-sm text-slate-400 mt-1">
-                  Loaded {cinemas.length} cinemas. Ready for Step 10 UI.
-                </p>
-              </div>
-            )}
+              <BookingView cinemas={cinemas} onRefreshCinemas={fetchCinemas} />
+           )}
+
+           
           </>
         )}
       </main>
