@@ -22,7 +22,6 @@ function formatDuration(totalMinutes: number): string {
 const MAX_SEGMENTS = 40;
 
 export function RewatchPlanView({ movies, onRefreshMovies }: RewatchPlanViewProps) {
-  // Default to "Avengers: Doomsday" if present, otherwise the last movie in the list
   const defaultTargetId =
     movies.find((m) => m.title.toLowerCase().includes("doomsday"))?.id ??
     movies[movies.length - 1]?.id ??
@@ -34,7 +33,6 @@ export function RewatchPlanView({ movies, onRefreshMovies }: RewatchPlanViewProp
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync selectedMovieId if movies list loads or selected movie was removed
   useEffect(() => {
     if (movies.length > 0 && !movies.some((m) => m.id === selectedMovieId)) {
       const doomsday = movies.find((m) => m.title.toLowerCase().includes("doomsday"));
@@ -75,7 +73,6 @@ export function RewatchPlanView({ movies, onRefreshMovies }: RewatchPlanViewProp
     setTogglingId(movieId);
     setError(null);
 
-    // Optimistic update so progress and remaining runtime recalculate immediately
     setPlan((prev) =>
       prev
         ? {
@@ -101,7 +98,6 @@ export function RewatchPlanView({ movies, onRefreshMovies }: RewatchPlanViewProp
         return;
       }
 
-      // Re-sync both the global movies state and the rewatch plan with the server
       await Promise.all([onRefreshMovies(), fetchRewatchPlan(selectedMovieId, true)]);
     } catch (err) {
       await fetchRewatchPlan(selectedMovieId, true);
@@ -111,7 +107,6 @@ export function RewatchPlanView({ movies, onRefreshMovies }: RewatchPlanViewProp
     }
   }
 
-  // Derived telemetry (always consistent with what the rail displays)
   const ordered = plan?.orderedMovies ?? [];
   const totalCount = ordered.length;
   const watchedCount = ordered.filter((m) => m.watched).length;

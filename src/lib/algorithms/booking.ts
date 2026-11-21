@@ -12,12 +12,6 @@ export interface BookingQuoteResult {
   message: string;
 }
 
-/**
- * Finds the minimum number of bundles whose seats sum to exact `groupSize`
- * using Bottom-Up Dynamic Programming with parent-pointer reconstruction.
- *
- * Time complexity: O(groupSize * bundleSizes.length) — at most 10,000 * 10 = 100,000 ops.
- */
 export function calculateOptimalBundles(
   bundleSizes: number[],
   groupSize: number
@@ -26,7 +20,7 @@ export function calculateOptimalBundles(
     throw new Error("Group size must be an integer between 1 and 10,000.");
   }
 
-  // Sort descending so ties favor larger bundles deterministically
+  // Prefer larger bundles on ties
   const sortedBundles = Array.from(new Set(bundleSizes))
     .filter((size) => Number.isInteger(size) && size >= 1 && size <= 500)
     .sort((a, b) => b - a);
@@ -41,13 +35,11 @@ export function calculateOptimalBundles(
     };
   }
 
-  // dp[s] = minimum number of bundles needed to reach exact seat count `s`
   const dp = new Int32Array(groupSize + 1);
   const INF = groupSize + 1;
   dp.fill(INF);
   dp[0] = 0;
 
-  // choice[s] = bundle size used in the last step to reach seat count `s`
   const choice = new Int32Array(groupSize + 1);
   choice.fill(-1);
 
@@ -64,7 +56,6 @@ export function calculateOptimalBundles(
     }
   }
 
-  // No exact combination exists
   if (dp[groupSize] === INF) {
     return {
       possible: false,
@@ -75,7 +66,6 @@ export function calculateOptimalBundles(
     };
   }
 
-  // Reconstruct bundle counts via choice[] parent pointers
   const countsMap = new Map<number, number>();
   let remaining = groupSize;
 
@@ -86,7 +76,7 @@ export function calculateOptimalBundles(
   }
 
   const breakdown: BundleBreakdownItem[] = Array.from(countsMap.entries())
-    .sort((a, b) => b[0] - a[0]) // Largest bundle size first (e.g., 20 x 1, 9 x 2, 6 x 1)
+    .sort((a, b) => b[0] - a[0])
     .map(([bundleSize, count]) => ({
       bundleSize,
       count,

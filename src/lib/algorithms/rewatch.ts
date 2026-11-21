@@ -28,13 +28,6 @@ export class CircularDependencyError extends Error {
   }
 }
 
-/**
- * Checks whether setting `proposedPrerequisiteIds` on `movieId` would introduce
- * a direct self-loop or an indirect cycle in the prerequisite DAG.
- *
- * Logic: A cycle is formed iff `movieId` is reachable by traversing backward
- * through the prerequisites of any proposed prerequisite.
- */
 export function validateNoCircularDependency(
   movieId: string,
   proposedPrerequisiteIds: string[],
@@ -42,7 +35,6 @@ export function validateNoCircularDependency(
 ): void {
   const uniquePrereqs = Array.from(new Set(proposedPrerequisiteIds));
 
-  // Direct self-dependency check
   if (uniquePrereqs.includes(movieId)) {
     throw new CircularDependencyError(
       "A movie cannot list itself as a prerequisite."
@@ -54,7 +46,6 @@ export function validateNoCircularDependency(
     movieMap.set(movie.id, movie);
   }
 
-  // DFS upward from each proposed prerequisite to see if we can reach `movieId`
   const visited = new Set<string>();
 
   function reachesTarget(currentId: string): boolean {
@@ -83,13 +74,6 @@ export function validateNoCircularDependency(
   }
 }
 
-/**
- * Computes the topological rewatch order for `targetMovieId`.
- * - Includes all transitive prerequisites exactly once.
- * - Guarantees every movie appears after all of its prerequisites.
- * - Excludes `targetMovieId` itself.
- * - Computes watched count and total runtime of unwatched prerequisites.
- */
 export function computeRewatchOrder(
   targetMovieId: string,
   allMovies: MovieNode[]
@@ -119,7 +103,7 @@ export function computeRewatchOrder(
 
     visiting.add(currentId);
 
-    // Sort prerequisite IDs deterministically by releaseYear then title for clean tie-breaking
+    // Prefer release year, then title
     const sortedPrereqs = [...movie.prerequisiteIds].sort((aId, bId) => {
       const a = movieMap.get(aId);
       const b = movieMap.get(bId);
@@ -135,7 +119,7 @@ export function computeRewatchOrder(
     visiting.delete(currentId);
     visited.add(currentId);
 
-    // Exclude the target movie itself from the rewatch list
+    // Exclude the target from its own rewatch list
     if (currentId !== targetMovieId) {
       orderedMovies.push(movie);
     }

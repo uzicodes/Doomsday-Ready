@@ -71,7 +71,6 @@
 /* ---------- Components ---------- */
 
 @layer components {
-  /* Matte tactical steel panel with metallic top-edge highlight */
   .panel {
     background-color: var(--steel);
     border: 1px solid var(--edge);
@@ -236,7 +235,6 @@
     cursor: not-allowed;
   }
 
-  /* Custom square checkbox */
   .chk {
     appearance: none;
     -webkit-appearance: none;
