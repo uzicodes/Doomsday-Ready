@@ -24,6 +24,15 @@ export const metadata: Metadata = {
   title: "Doomsday Ready | Avengers: Doomsday Rewatch & Premiere Logistics",
   description:
     "Tactical briefing for Avengers: Doomsday. Plan your chronological MCU rewatch order and calculate exact IMAX premiere seat bundles.",
+  icons: {
+    icon: [
+      { url: "/favicon/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon/favicon.ico", sizes: "any" },
+    ],
+    apple: "/favicon/apple-touch-icon.png",
+  },
+  manifest: "/favicon/site.webmanifest",
 };
 
 export default function RootLayout({

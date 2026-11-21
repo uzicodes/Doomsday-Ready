@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { CinemaItem, MovieItem } from "@/types";
 import { MoviesView } from "@/components/MoviesView";
 import { RewatchPlanView } from "@/components/RewatchPlanView";
@@ -16,40 +17,6 @@ const TABS: { id: ActiveTab; index: string; label: string }[] = [
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
-}
-
-function DoomsdayEmblem() {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      className="h-11 w-11 shrink-0"
-      role="img"
-      aria-label="Avengers Doomsday emblem"
-    >
-      <polygon
-        points="24,2 43,13 43,35 24,46 5,35 5,13"
-        fill="#0D1117"
-        stroke="#10B981"
-        strokeWidth="1.5"
-      />
-      <polygon
-        points="24,7 38.5,15.5 38.5,32.5 24,41 9.5,32.5 9.5,15.5"
-        fill="none"
-        stroke="#2A3441"
-        strokeWidth="1"
-      />
-      <path
-        d="M15 34 L24 12 L33 34"
-        fill="none"
-        stroke="#00E599"
-        strokeWidth="3"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path d="M18.6 27 H29.4" fill="none" stroke="#00E599" strokeWidth="2.5" strokeLinecap="square" />
-      <circle cx="24" cy="12" r="1.7" fill="#EF4444" />
-    </svg>
-  );
 }
 
 export default function HomePage() {
@@ -111,7 +78,13 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 pt-4 sm:px-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3.5">
-              <DoomsdayEmblem />
+              <Image
+                src="/logo.png"
+                alt="Doomsday Ready logo"
+                width={40}
+                height={40}
+                className="h-10 w-10 shrink-0 object-contain"
+              />
               <div>
                 <h1 className="font-display text-2xl font-bold leading-none tracking-[0.08em] text-white">
                   DOOMSDAY <span className="text-arc-bright">READY</span>
